@@ -21,8 +21,8 @@ ssh() {
     # Remove leading "+" if present
     remote_window_name=${remote_window_name#+}
 
-    # Fallback if no remote host names are found
-    echo "${remote_window_name:-unknown}"
+    # Return the remote window; empty string if no more active SSH sessions
+    echo "$remote_window_name"
   }
 
   # Skip if not in a tmux session
@@ -32,26 +32,31 @@ ssh() {
   fi
 
   # Get the current tmux window and pane IDs
-  local window_id pane_id
+  local window_id pane_id original_window_name
   window_id=$(tmux display-message -p "#{window_id}")
   pane_id=$(tmux display-message -p "#{pane_id}")
 
   # Save the original window name if not already stored
   if [[ -z "$(tmux show-option -wqv @original-window-name)" ]]; then
-    tmux set-option -wq @original-window-name "$(tmux display-message -p "#W")"
+    original_window_name="$(tmux display-message -p "#W")"
+    echo "Original window name: <<<$original_window_name>>>"
+    tmux set-option -wq @original-window-name "$original_window_name"
   fi
 
   # Perform a dry-run to get the remote host name
   local remote_host_name
   remote_host_name=$(command ssh -G "$@" 2>/dev/null | awk '/^host / {print $2}' 2>/dev/null )
   remote_host_name=${remote_host_name:-"unknown"}
+  echo "Remote host: <<<$remote_host_name>>>"
 
   # Store the remote host name for this pane
-  tmux set-option -p @remote-host-name "$remote_host_name"
+  tmux set-option -pq @remote-host-name "$remote_host_name"
 
   # Build the concatenated window name
   local remote_window_name
   remote_window_name=$(__build_remote_window_name)
+
+  echo "Remote window name: <<<$remote_window_name>>>"
   
   # Rename the TMUX window to the concatenated name
   tmux rename-window "$remote_window_name"
@@ -63,14 +68,16 @@ ssh() {
   tmux set-option -up @remote-host-name
 
   # Rebuild the window name after SSH exits
-  remote_window_name=$(tmux list-panes -F "#{pane_id}:#{pane_current_command}" |
-    awk -F: -v wid="$window_id" '
-      $1 ~ wid { hosts = hosts "+" $2 }
-      END { print substr(hosts, 2) }')
+  remote_window_name=$(__build_remote_window_name)
+
+  echo "Remote window name: <<<$remote_window_name>>>"
 
   # Restore the original window name if no more active SSH sessions
   if [[ -z "$remote_window_name" ]]; then
-    tmux rename-window "$(tmux show-option -wqv @original-window-name)"
+    original_window_name="$(tmux show-option -wqv @original-window-name)"
+    echo "Original window name: <<<$original_window_name>>>"
+    tmux rename-window "$original_window_name"
+    # Remove the window name variable when there are no more SSH sessions active
     tmux set-option -uq @original-window-name
   else
     tmux rename-window "$remote_window_name"
