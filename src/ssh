@@ -4,8 +4,7 @@
 
 ssh() {
   function __build_remote_window_name() {
-    local remote_host_name
-    local remote_window_name
+    local remote_host_name remote_window_name pane_id
     remote_window_name=""
 
     # Loop through all panes in the current window
@@ -16,7 +15,7 @@ ssh() {
         # Append the host name to the window name
         remote_window_name+="+$remote_host_name"
       fi
-    done < <(tmux list-panes -F "#{pane_id}" -t "$window_id")
+    done < <(tmux list-panes -F "#{pane_id}" -t "$current_window_id")
 
     # Remove leading "+" if present
     remote_window_name=${remote_window_name#+}
@@ -25,6 +24,32 @@ ssh() {
     echo "$remote_window_name"
   }
 
+  __check_existing_remote_session() {
+    local current_pane_id remote_host_name pane_id existing_remote_host
+
+    local remote_host_name="$1"
+
+    # Skip check if no remote host is set for the current pane
+    [[ -z "$remote_host_name" ]] && return 1
+
+    # Iterate through all panes in the same window
+    while read -r pane_id; do
+      # Skip the current pane
+      [[ "$pane_id" == "$current_pane_id" ]] && continue
+
+      # Check the remote host name for the other pane
+      existing_remote_host=$(tmux show-option -pqv -t "$pane_id" @remote-host-name)
+      if [[ "$existing_remote_host" == "$remote_host_name" ]]; then
+        # Match found
+        return 0
+      fi
+    done < <(tmux list-panes -F "#{pane_id}" -t "$current_window_id")
+
+    # No match found
+    return 1
+  }
+
+
   # Skip if not in a tmux session
   if [[ -z "$TMUX" ]]; then
     command ssh "$@"
@@ -32,9 +57,9 @@ ssh() {
   fi
 
   # Get the current tmux window and pane IDs
-  local window_id pane_id original_window_name
-  window_id=$(tmux display-message -p "#{window_id}")
-  pane_id=$(tmux display-message -p "#{pane_id}")
+  local current_window_id current_pane_id original_window_name
+  current_window_id=$(tmux display-message -p "#{window_id}")
+  current_pane_id=$(tmux display-message -p "#{pane_id}")
 
   # Save the original window name if not already stored
   if [[ -z "$(tmux show-option -wqv @original-window-name)" ]]; then
@@ -48,6 +73,12 @@ ssh() {
   remote_host_name=$(command ssh -G "$@" 2>/dev/null | awk '/^host / {print $2}' 2>/dev/null )
   remote_host_name=${remote_host_name:-"unknown"}
   echo "Remote host: <<<$remote_host_name>>>"
+
+  if __check_existing_remote_session "$remote_host_name"; then
+    echo "Already exists."
+  else
+    echo "Does not exist."
+  fi
 
   # Store the remote host name for this pane
   tmux set-option -pq @remote-host-name "$remote_host_name"
