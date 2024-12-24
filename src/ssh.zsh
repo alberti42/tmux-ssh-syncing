@@ -22,42 +22,24 @@ ssh() {
     echo "${(j:+:)remote_window_name}"
   }
 
-  # __check_existing_remote_session() {
-  #   local current_pane_id remote_host_name pane_id existing_remote_host
-
-  #   local remote_host_name="$1"
-
-  #   # Skip check if no remote host is set for the current pane
-  #   [[ -z "$remote_host_name" ]] && return 1
-
-  #   # Iterate through all panes in the same window
-  #   while read -r pane_id; do
-  #     # Skip the current pane
-  #     [[ "$pane_id" == "$current_pane_id" ]] && continue
-
-  #     # Check the remote host name for the other pane
-  #     existing_remote_host=$(tmux show-option -pqv -t "$pane_id" @remote-host-name)
-  #     if [[ "$existing_remote_host" == "$remote_host_name" ]]; then
-  #       # Match found
-  #       return 0
-  #     fi
-  #   done < <(tmux list-panes -F "#{pane_id}" -t "$current_window_id")
-
-  #   # No match found
-  #   return 1
-  # }
-
   # Define a cleanup function for the trap
   # shellcheck disable=SC2317
   __tmux_ssh_cleanup() {
-    local remote_window_name original_window_name
+    local remote_window_name original_window_name current_window_id current_pane_id
+
+    current_window_id=$1
+    current_pane_id=$2
+
+    echo $current_window_id
+    echo $current_pane_id
+
     # Remove the host name from the list after SSH exits
     tmux set-option -t "$current_pane_id" -up @remote-host-name
 
     echo "Cleaning pane $current_pane_id"
 
     echo "Waiting"
-    sleep 1
+    sleep 0.1
 
     # Rebuild the window name after SSH exits
     remote_window_name=$(__tmux_ssh_build_remote_window_name)
@@ -74,14 +56,6 @@ ssh() {
     else
       tmux rename-window -t "$current_pane_id" "$remote_window_name"
     fi
-  }
-
-  echo "DD"
-  echo "$@"
-
-  return 
-  __test_fnc() {
-    echo "HELLO"
   }
 
   # Skip if not in a tmux session
@@ -114,27 +88,18 @@ ssh() {
 
   # Build the concatenated window name
   local remote_window_name
-  remote_window_name=$(__build_remote_window_name)
+  remote_window_name=$(__tmux_ssh_build_remote_window_name)
 
   echo "Remote window name: <<<$remote_window_name>>>"
   
   # Rename the TMUX window to the concatenated name
   tmux rename-window "$remote_window_name"
 
+  # Execute the clean up function
+  local cleanup_cmd
+  trap "__tmux_ssh_cleanup '$current_window_id' '$current_pane_id'
+        unfunction __tmux_ssh_build_remote_window_name __tmux_ssh_cleanup" EXIT
+
   # Start SSH process in the background
-  local SSH_PID
-  echo "$@"
-  command ssh "$@" &
-  SSH_PID=$!
-
-  echo "PID: $SSH_PID"
-
-  # Wait for SSH process to complete
-  wait $SSH_PID
-
-  date
-  echo "FINISHED"
-
-  # Execute the clea up function
-  # __tmux_ssh_cleanup
+  command ssh "$@"
 }
