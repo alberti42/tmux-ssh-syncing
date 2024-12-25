@@ -2,23 +2,18 @@
 
 # Copyright (c) 2024, Andrea Alberti
 
-# Safe method to retrieve the path of the plugin init script
-0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
-0="${${(M)0:#/*}:-$PWD/$0}"
+# Dynamically load 'ssh' function by overwriting
+# the loader function below with the actual function
+function ssh() {
+  local loader_path
+  loader_path="${(%):-%x}"
 
-# Path to 'src' directory containg the files to be sourced
-local src_dir
-src_dir="${0:h}/src"
+  # Determine the directory of the loader and append the src path
+  local src_path="${loader_path:h}/src/ssh.zsh"
 
-# Dynamically define the function with expanded value of $src_dir
-ssh() {
-  typeset -g src_ssh
-  if [[ -z "$src_ssh" ]]; then
-    src_ssh="$src_dir/ssh.zsh"
-  else
-    source "$src_ssh"
-    ssh "$@"
-  fi
+  # Source the actual implementation
+  source "$src_path"
+
+  # Overwrite this function with the actual implementation
+  ssh "$@"
 }
-# Initialize src_ssh
-ssh
