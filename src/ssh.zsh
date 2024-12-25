@@ -1,5 +1,3 @@
-#!/hint/zsh
-
 # Copyright (c) 2024, Andrea Alberti
 
 ssh() {
