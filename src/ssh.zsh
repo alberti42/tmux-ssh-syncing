@@ -21,7 +21,7 @@ ssh() {
 
   # Define a cleanup function for the trap
   # shellcheck disable=SC2317
-  __tmux_ssh_cleanup() {
+  function __tmux_ssh_cleanup() {
     local remote_window_name original_window_name current_window_id current_pane_id
 
     current_window_id=$1
@@ -78,8 +78,12 @@ ssh() {
 
   # Execute the clean up function
   local cleanup_cmd
-  trap "__tmux_ssh_cleanup '$current_window_id' '$current_pane_id'
-        unfunction __tmux_ssh_build_remote_window_name __tmux_ssh_cleanup" EXIT
+  cleanup_cmds="__tmux_ssh_cleanup '$current_window_id' '$current_pane_id'
+    # Avoid function pollution
+    unfunction __tmux_ssh_build_remote_window_name __tmux_ssh_cleanup
+  "
+  trap "$cleanup_cmds" EXIT
+  trap "$cleanup_cmds \; return 1" INT
 
   # Start SSH process in the background
   command ssh "$@"

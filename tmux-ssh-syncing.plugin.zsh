@@ -2,11 +2,11 @@
 
 # Copyright (c) 2024, Andrea Alberti
 
-# Safe method to retrieve the plugin path
+# Safe method to retrieve the path of the plugin init script
 0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
 
-# Static value stored in a separate variable
+# Path to 'src' directory containg the files to be sourced
 local src_dir
 src_dir="${0:h}/src"
 
