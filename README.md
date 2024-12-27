@@ -9,7 +9,7 @@ Synchronize your `tmux` window names with active `ssh` sessions. This plugin dyn
 - Automatically restores the original `tmux` window name when no `ssh` sessions remain.
 - Works seamlessly with `oh-my-zsh` and `zinit` plugin managers.
 
-<a href="https://asciinema.org/a/696050" target="_blank"><img src="https://asciinema.org/a/696050.png" alt="Screenshot"></a>
+<a href="https://asciinema.org/a/696295" target="_blank"><img src="https://asciinema.org/a/696295.png" alt="Screenshot"></a>
 
 ---
 
