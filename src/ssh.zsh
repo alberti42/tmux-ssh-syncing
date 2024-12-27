@@ -38,7 +38,7 @@ ssh() {
       original_window_name="$(tmux show-option -t "$current_pane_id" -wqv "@original-window-name")"
       tmux rename-window -t "$current_pane_id" "$original_window_name"
       # Remove the window name variable when there are no more SSH sessions active
-      tmux set-option -t "$current_pane_id" -uq "@original-window-name"
+      tmux set-option -t "$current_pane_id" -uwq "@original-window-name"
     else
       tmux rename-window -t "$current_pane_id" "$remote_window_name"
     fi
