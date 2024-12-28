@@ -1,6 +1,8 @@
 # Copyright (c) 2024, Andrea Alberti
 
 ssh() {
+  emulate -LR zsh
+  
   function __tmux_ssh_build_remote_window_name() {
     local remote_host_name
     typeset -aU remote_window_name # Unique array
