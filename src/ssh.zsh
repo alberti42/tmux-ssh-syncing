@@ -4,6 +4,7 @@ ssh() {
   emulate -LR zsh
   
   function __tmux_ssh_build_remote_window_name() {
+    trap '' INT # Prevent interruption inside this function
     local remote_host_name
     typeset -aU remote_window_name # Unique array
 
@@ -24,6 +25,7 @@ ssh() {
   # Define a cleanup function for the trap
   # shellcheck disable=SC2317
   function __tmux_ssh_cleanup() {
+    trap '' INT # Prevent interruption inside this function
     local remote_window_name original_window_name current_window_id current_pane_id
 
     current_window_id=$1
@@ -80,12 +82,13 @@ ssh() {
 
   # Execute the clean up function
   local cleanup_cmd
-  cleanup_cmds="__tmux_ssh_cleanup '$current_window_id' '$current_pane_id'
+  cleanup_cmds="
+  __tmux_ssh_cleanup '$current_window_id' '$current_pane_id'
     # Avoid function pollution
     unfunction __tmux_ssh_build_remote_window_name __tmux_ssh_cleanup
   "
   trap "$cleanup_cmds" EXIT
-  trap "$cleanup_cmds \; return 1" INT
+  trap "return 1" TERM INT
 
   # Start SSH process in the background
   command ssh "$@"
