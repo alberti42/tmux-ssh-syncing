@@ -18,44 +18,49 @@ ssh() {
     # Open TTY; bail quietly if it fails
     exec {fd}<> /dev/tty || return 0
 
-    # Raw-ish mode so reply isn't echoed/line-buffered
-    stty_orig=$(stty -g <&$fd)
-    stty -echo -icanon time 0 min 0 <&$fd
-    
-    # Ask: terminal replies DCS "1$r q<Ps> q" ST (success)
-    printf '%s' "$DECRQSS" > /dev/tty
+    { # --- try block ---
+      
+      # Raw-ish mode so reply isn't echoed/line-buffered
+      stty_orig=$(stty -g <&$fd)
+      stty -echo -icanon time 0 min 0 <&$fd
+      
+      # Ask: terminal replies DCS "1$r q<Ps> q" ST (success)
+      printf '%s' "$DECRQSS" > /dev/tty
 
-    buf=''
-    # Read until we see ST (ESC \) anywhere in the buffer (cap ~2s)
-    for i in {1..100}; do
-      IFS= read -r -u $fd -k 1 -t 0.01 chunk || chunk=''
-      [[ -n "$chunk" ]] && buf+="$chunk"
-      [[ $buf == *"$ST"* ]] && break
-    done
+      buf=''
+      # Read until we see ST (ESC \) anywhere in the buffer (cap ~2s)
+      for i in {1..100}; do
+        IFS= read -r -u $fd -k 1 -t 0.01 chunk || chunk=''
+        [[ -n "$chunk" ]] && buf+="$chunk"
+        [[ $buf == *"$ST"* ]] && break
+      done
 
-    # Restore TTY and close FD
-    stty "$stty_orig" <&$fd
-    : {fd}>&-
+      # Extract first DCS block and require DECRQSS success "1$r"
+      [[ $buf == *"$DCS"*"$ST"* ]] || return 0
+      dcs_reply=${buf#*"$DCS"}
+      dcs_reply=${dcs_reply%%"$ST"*}
+      
+      # Must be a success reply
+      [[ $dcs_reply == 1'$r'* ]] || return 0
 
-    # Extract first DCS block and require DECRQSS success "1$r"
-    [[ $buf == *"$DCS"*"$ST"* ]] || return 0
-    dcs_reply=${buf#*"$DCS"}
-    dcs_reply=${dcs_reply%%"$ST"*}
-    
-    # Must be a success reply
-    [[ $dcs_reply == 1'$r'* ]] || return 0
-
-    ps=''
-    if [[ $dcs_reply == '1$r q'[0-6]' q'* ]]; then
-      ps="${dcs_reply#'1$r q'}"
-      ps="${ps%%' q'*}"
-    fi
-    
-    # Validate 0..6 and print
-    if [[ $ps = <-> && $ps -ge 0 && $ps -le 6 ]]; then
-      print -r -- "$ps"
-    fi
-    return 0
+      ps=''
+      if [[ $dcs_reply == '1$r q'[0-6]' q'* ]]; then
+        ps="${dcs_reply#'1$r q'}"
+        ps="${ps%%' q'*}"
+      fi
+      
+      # Validate 0..6 and print
+      if [[ $ps = <-> && $ps -ge 0 && $ps -le 6 ]]; then
+        print -r -- "$ps"
+      fi
+      return 0
+    } always {
+      # --- always cleanup, even on early return ---
+      
+      # Restore TTY and close FD
+      stty "$stty_orig" <&$fd 2>/dev/null
+      : {fd}>&-
+    }
   }
 
   # Map tmux's cursor-style option to DECSCUSR Ps
@@ -163,9 +168,6 @@ ssh() {
     [[ -z "$cursor_style" ]] && cursor_style="$(__tmux_ps_from_tmux_cursor_style)"
     command tmux set-option -t "$current_pane_id" -wq "@original-cursor-style" "$cursor_style"
   fi
-  
-  # Remember for restore-on-exit
-  command tmux set-option -t "$current_pane_id" -wq "@original-cursor-style" "$cursor_style"
   
   # Compute remote host and update window name
   local remote_host_name
