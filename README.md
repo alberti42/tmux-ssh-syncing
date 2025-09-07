@@ -7,6 +7,7 @@ Synchronize your `tmux` window names with active `ssh` sessions. This plugin dyn
 - Dynamically updates `tmux` window names to show connected remote hosts.
 - Ensures unique and clean concatenation of remote hostnames.
 - Automatically restores the original `tmux` window name when no `ssh` sessions remain.
+- Automatically restores the original cursor style after an `ssh` session
 - Works seamlessly with `oh-my-zsh` and `zinit` plugin managers.
 
 <https://github.com/user-attachments/assets/25f5c846-5093-4307-a77d-17f2598cdf44>
