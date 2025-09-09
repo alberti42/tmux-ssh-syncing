@@ -25,23 +25,26 @@ ssh() {
       stty -echo -icanon time 0 min 0 <&$fd
       
       # Ask: terminal replies DCS "1$r q<Ps> q" ST (success)
-      printf '%s' "$DECRQSS" > /dev/tty
+      printf '%s' "$DECRQSS" >&$fd
 
       buf=''
-      # Read until we see ST (ESC \) anywhere in the buffer (cap ~2s)
-      for i in {1..100}; do
-        IFS= read -r -u $fd -k 1 -t 0.01 chunk || chunk=''
-        [[ -n "$chunk" ]] && buf+="$chunk"
-        [[ $buf == *"$ST"* ]] && break
+      # Read until we see ST (ESC \) anywhere in the buffer (cap ~2s = 200 × 10ms)
+      for i in {1..200}; do
+        if IFS= read -r -u $fd -k 1 -t 0.01 chunk; then
+          buf+="$chunk"
+          [[ $buf == *"$ST"* ]] && break
+        fi
       done
 
+      # Require we saw a DCS...ST block
+      [[ $buf == *"$DCS"*"$ST"* ]] || return 1
+
       # Extract first DCS block and require DECRQSS success "1$r"
-      [[ $buf == *"$DCS"*"$ST"* ]] || return 0
       dcs_reply=${buf#*"$DCS"}
       dcs_reply=${dcs_reply%%"$ST"*}
       
       # Must be a success reply
-      [[ $dcs_reply == 1'$r'* ]] || return 0
+      [[ $dcs_reply == 1'$r'* ]] || return 1
 
       ps=''
       if [[ $dcs_reply == '1$r q'[0-6]' q'* ]]; then
@@ -52,14 +55,26 @@ ssh() {
       # Validate 0..6 and print
       if [[ $ps = <-> && $ps -ge 0 && $ps -le 6 ]]; then
         print -r -- "$ps"
+        return 0
+      else
+        return 1  
       fi
-      return 0
     } always {
       # --- always cleanup, even on early return ---
       
-      # Restore TTY and close FD
+      # Preserve result of the try-block (including any return above)
+      local ret=$?
+      
+      # Restores the terminal mode on the same fd
       stty "$stty_orig" <&$fd 2>/dev/null
+
+      # We close the file descriptor with redirection `>&-`
+      # Redirections in zsh must be attached to a command.
+      # Since we don’t actually want to run a real command
+      # the no-op builtin `:` is used as the command.
       : {fd}>&-
+      
+      return $ret
     }
   }
 
